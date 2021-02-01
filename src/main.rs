@@ -1,4 +1,4 @@
-use lib::MyMacro;
+use lib::*;
 
 #[derive(MyMacro)]
 struct Yeet {
@@ -30,3 +30,9 @@ fn main() {
     };
     println!("Hello, world!");
 }
+
+#[AssertReturnSync]
+fn failed() -> *const u8 { unimplemented!() }
+
+#[AssertReturnSync]
+fn success() -> u8 { unimplemented!() }

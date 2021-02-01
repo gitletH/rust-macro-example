@@ -3,8 +3,8 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{quote, quote_spanned};
-use syn::{Error, parse_macro_input, DeriveInput, Data};
+use quote::{quote, quote_spanned, format_ident};
+use syn::{parse_quote, Error, parse_macro_input, DeriveInput, Data};
 use syn::spanned::Spanned;
 
 #[proc_macro_derive(MyMacro)]
@@ -49,4 +49,52 @@ pub fn my_macro(input: TokenStream) -> TokenStream {
 
     // Hand the output tokens back to the compiler
     TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn AssertReturnSync(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse the input tokens into a syntax tree.
+    let input: syn::ItemFn = syn::parse(item).unwrap();
+
+    // // Generate assertions for function argument types.
+    // let assertions: Vec<syn::ItemStruct> = input.sig.inputs
+    //     .iter()
+    //     .filter_map(|arg| {
+    //         if let syn::FnArg::Typed(arg) = arg {
+    //             if let syn::Type::Path(arg_type) = &*arg.ty {
+    //                 let arg_type = 
+    //                 let assertion_ident = format_ident!("_AssertCopyFor_{}", arg_type);
+    //                 return Some(parse_quote! {
+    //                     struct #assertion_ident where #arg_type: ::core::marker::Copy;
+    //                 });
+    //             }
+    //         }
+    //         None
+    //     })
+    //     .collect();
+
+    // Generate an assertion for function return type, if there is one.
+
+    let assertion = match &input.sig.output {
+        syn::ReturnType::Type(_, return_type) => {
+            match &**return_type {
+                syn::Type::Path(return_type) => {
+                    let return_type = &return_type.path.segments[0].ident;
+                    let assertion_ident = format_ident!("_AssertSyncFor{}_", return_type);
+                    quote!{
+                        struct #assertion_ident where #return_type: ::core::marker::Sync;
+                    }
+                },
+                _ => quote!{},
+            }
+        },
+        _ => quote!{},
+    };
+    
+    // Returns the original input and the generated assertions back to the compiler.
+    TokenStream::from(quote! {
+        #input
+
+        #assertion
+    })
 }
