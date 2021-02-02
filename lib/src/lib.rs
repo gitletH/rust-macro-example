@@ -98,3 +98,52 @@ pub fn AssertReturnSync(attr: TokenStream, item: TokenStream) -> TokenStream {
         #assertion
     })
 }
+
+
+
+#[proc_macro_derive(SerdePacked)]
+pub fn serde_packed(input: TokenStream) -> TokenStream {
+    // Parse the input tokens into a syntax tree
+    let input = parse_macro_input!(input as DeriveInput);
+
+
+    let checks = match &input.data {
+        Data::Struct(st) => {
+            st.fields.iter().map(|field| -> syn::Item {
+                let ty = &field.ty;
+                println!("{:#?}", quote_spanned! { ty.span()=>
+                    const _: fn() = || {
+                    };
+                });
+                syn::parse2(quote_spanned! { ty.span()=>
+                    // Borrowed from static_assertions
+                    const _: fn() = || {
+                        // Only callable when `$type` implements all traits in `$($trait)+`.
+                        // fn assert_serdeable<T: ?Sized + ::core::marker::Copy + ::core::marker::Sync + ::core::marker::Send>() {}
+                        // assert_serdeable::<$ty>();
+                    };
+                }).expect("asd")
+            })
+        }
+        _ => panic!("only struct is supported"),
+    };
+
+    let ident = input.ident;
+
+    let expanded = quote! {
+        impl Serde for #ident {
+            fn serialize(&self) -> &[u8] {
+                unsafe { ::std::slice::from_raw_parts(self as *const Self as *const u8, ::std::mem::size_of::<Self>()) }
+            }
+            fn deserialize(input: &[u8]) -> &Self {
+                assert!(input.len() >= ::std::mem::size_of::<Self>());
+                unsafe { &*(input.as_ptr() as *const _)}
+            }
+        }
+
+        #(#checks)*
+    };
+
+    // Hand the output tokens back to the compiler
+    TokenStream::from(expanded)
+}
